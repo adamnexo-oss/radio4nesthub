@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Radio">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <title>Radio SVPL</title>
+  <script>
+    window.__onGCastApiAvailable = function(isAvailable){
+      window.radioCastApiAvailable = isAvailable
+      if(isAvailable && window.radioInitializeCastApi){
+        window.radioInitializeCastApi()
+      }
+    }
+  </script>
+  <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
+  <style>
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      background:#0f172a;
+      color:white;
+      font-family:Arial,system-ui,sans-serif;
+    }
+    .radio-app{
+      width:min(900px,100%);
+      height:100vh;
+      margin:auto;
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+    .radio-header{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      margin:4px 0 8px;
+    }
+    .radio-header h1{
+      margin:0;
+      font-size:28px;
+      line-height:1;
+    }
+    .radio-header p{
+      margin:5px 0 0;
+      color:rgba(255,255,255,.72);
+      font-size:15px;
+    }
+    .card{
+      background:#1e293b;
+      border-radius:16px;
+      box-shadow:0 4px 15px rgba(0,0,0,.3);
+    }
+    .radio-player{
+      padding:12px;
+      margin:6px 0;
+    }
+    .radio-label{
+      margin:0 0 6px;
+      color:#facc15;
+      font-size:12px;
+      font-weight:bold;
+      text-transform:uppercase;
+    }
+    .radio-player h2{
+      margin:0;
+      font-size:24px;
+    }
+    .radio-player p{
+      margin:6px 0;
+      color:rgba(255,255,255,.74);
+      font-size:14px;
+    }
+    button{
+      border:0;
+      border-radius:10px;
+      background:#334155;
+      color:white;
+      cursor:pointer;
+      font:inherit;
+      font-weight:700;
+      padding:10px;
+    }
+    .radio-controls{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:6px;
+      margin-top:10px;
+    }
+    .radio-controls button:nth-child(n+3){
+      grid-column:1 / -1;
+    }
+    #radioPlayPause{
+      background:#34d399;
+      color:#062014;
+      font-size:18px;
+    }
+    .radio-volume{
+      display:grid;
+      grid-template-columns:auto 1fr 42px;
+      gap:8px;
+      align-items:center;
+      background:#1e293b;
+      padding:8px 10px;
+      margin:6px 0;
+      border-radius:12px;
+      box-shadow:0 4px 15px rgba(0,0,0,.22);
+    }
+    .radio-volume span,.radio-volume b{font-size:13px}
+    .radio-volume input{
+      width:100%;
+      margin:0;
+      accent-color:#34d399;
+    }
+    .radio-search{
+      width:100%;
+      padding:10px 12px;
+      margin:5px 0 6px;
+      font-size:16px;
+      border:0;
+      border-radius:10px;
+    }
+    .radio-segments{
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:6px;
+    }
+    .radio-segments button.active{
+      background:white;
+      color:#0f172a;
+    }
+    .radio-scroll-area{
+      flex:1;
+      min-height:0;
+      overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
+      overscroll-behavior:contain;
+      touch-action:pan-y;
+      padding:2px 2px 24px;
+      margin-top:6px;
+    }
+    .radio-quick{
+      display:grid;
+      grid-template-columns:repeat(2,1fr);
+      gap:6px;
+      margin:8px 0;
+    }
+    .radio-group-title{
+      margin:10px 0 6px;
+      color:rgba(255,255,255,.75);
+      font-size:13px;
+      font-weight:bold;
+    }
+    .radio-status{
+      margin:8px 0;
+      color:rgba(255,255,255,.72);
+      font-size:13px;
+    }
+    .radio-grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:8px;
+    }
+    .radio-station{
+      min-height:72px;
+      padding:10px;
+      text-align:left;
+    }
+    .radio-station.active{
+      outline:3px solid #34d399;
+      background:#225447;
+    }
+    .radio-station b{
+      display:block;
+      margin-bottom:6px;
+      font-size:16px;
+    }
+    .radio-station span{
+      color:rgba(255,255,255,.7);
+      font-size:12px;
+    }
+    .radio-empty{
+      padding:20px;
+      border:1px dashed rgba(255,255,255,.25);
+      border-radius:14px;
+      text-align:center;
+      color:rgba(255,255,255,.75);
+    }
+    @media (min-width:680px){
+      .radio-controls{grid-template-columns:58px 58px 1fr 1fr}
+      .radio-controls button:nth-child(n+3){grid-column:auto}
+      .radio-quick{grid-template-columns:repeat(3,1fr)}
+      .radio-grid{grid-template-columns:repeat(2,1fr)}
+      .radio-player h2{font-size:28px}
+    }
+  </style>
+</head>
+<body>
+  <main class="radio-app">
+    <div class="radio-header">
+      <div>
+        <h1>Radio</h1>
+        <p>Polskie, szwedzkie i inne stacje</p>
+      </div>
+    </div>
+
+    <section class="radio-player card">
+      <p class="radio-label">Teraz gra</p>
+      <h2 id="radioCurrentName">Wybierz stację</h2>
+      <p id="radioCurrentMeta">Dotknij stacji albo użyj szybkich przycisków.</p>
+      <div class="radio-controls">
+        <button id="radioPlayPause" onclick="radioTogglePlay()">▶</button>
+        <button onclick="radioStop()">■</button>
+        <button onclick="radioCast()">Cast</button>
+        <button onclick="radioLoadStations()">Odśwież</button>
+      </div>
+    </section>
+
+    <div class="radio-volume">
+      <span>Głośność</span>
+      <input id="radioVolume" type="range" min="0" max="100" value="80" oninput="radioSetVolume(this.value)">
+      <b id="radioVolumeLabel">80%</b>
+    </div>
+
+    <input id="radioSearch" class="radio-search" type="search" placeholder="Szukaj: RMF, P1, jazz" oninput="radioSearchChanged(this.value)">
+
+    <div class="radio-segments">
+      <button id="radioCountryPL" class="active" onclick="radioSetCountry('PL')">Polska</button>
+      <button id="radioCountrySE" onclick="radioSetCountry('SE')">Szwecja</button>
+      <button id="radioCountryOther" onclick="radioSetCountry('')">Inne</button>
+    </div>
+
+    <div class="radio-scroll-area">
+      <div class="radio-quick">
+        <button onclick="radioQuick('RMF FM','PL')">RMF FM</button>
+        <button onclick="radioQuick('Radio ZET','PL')">Radio ZET</button>
+        <button onclick="radioQuick('TOK FM','PL')">TOK FM</button>
+        <button onclick="radioQuick('Polskie Radio Jedynka','PL')">Jedynka</button>
+        <button onclick="radioQuick('Sveriges Radio P1','SE')">SR P1</button>
+        <button onclick="radioQuick('Sveriges Radio P3','SE')">SR P3</button>
+      </div>
+
+      <p class="radio-group-title">Gdańsk / Trójmiasto</p>
+      <div class="radio-quick">
+        <button onclick="radioQuick('Radio Gdańsk','PL')">Radio Gdańsk</button>
+        <button onclick="radioQuick('Eska Trójmiasto','PL')">Eska 3City</button>
+        <button onclick="radioQuick('Radio Plus Gdańsk','PL')">Plus Gdańsk</button>
+        <button onclick="radioQuick('Złote Przeboje Gdańsk','PL')">Złote Gdańsk</button>
+        <button onclick="radioQuick('RMF Maxx Trójmiasto','PL')">RMF 3City</button>
+        <button onclick="radioQuick('Radio Pogoda Gdańsk','PL')">Pogoda Gdańsk</button>
+      </div>
+
+      <p class="radio-group-title">Szwecja</p>
+      <div class="radio-quick">
+        <button onclick="radioQuick('Sveriges Radio P4 Gotland','SE')">P4 Gotland</button>
+        <button onclick="radioQuick('Sveriges Radio P4 Stockholm','SE')">P4 Stockholm</button>
+        <button onclick="radioQuick('NRJ Sweden','SE')">NRJ Sweden</button>
+        <button onclick="radioQuick('NRJ Stockholm','SE')">NRJ Stockholm</button>
+        <button onclick="radioQuick('Sveriges Radio P2 Klassisk','SE')">SR P2 Klassisk</button>
+        <button onclick="radioQuick('Klassisk musik','SE')">Klassisk musik</button>
+      </div>
+
+      <p id="radioStatus" class="radio-status">Ładowanie stacji...</p>
+      <div id="radioStations" class="radio-grid"></div>
+    </div>
+    <audio id="radioAudio"></audio>
+  </main>
+
+  <script>
+    const radioApiHosts = [
+      "https://de1.api.radio-browser.info",
+      "https://nl1.api.radio-browser.info",
+      "https://at1.api.radio-browser.info"
+    ]
+
+    let radioState = {
+      country:"PL",
+      query:"",
+      stations:[],
+      current:null,
+      playing:false,
+      volume:Number(localStorage.getItem("radioVolume")) || 0.8,
+      castReady:false
+    }
+
+    function radioInitializeCastApi(){
+      if(!window.cast || !window.chrome || !chrome.cast || radioState.castReady) return
+      cast.framework.CastContext.getInstance().setOptions({
+        receiverApplicationId:chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+        autoJoinPolicy:chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+      })
+      radioState.castReady = true
+    }
+    window.radioInitializeCastApi = radioInitializeCastApi
+    if(window.radioCastApiAvailable) radioInitializeCastApi()
+
+    function radioSetStatus(message){
+      document.getElementById("radioStatus").textContent = message
+    }
+
+    function radioAudio(){
+      return document.getElementById("radioAudio")
+    }
+
+    function radioApplyVolume(){
+      let audio = radioAudio()
+      let label = document.getElementById("radioVolumeLabel")
+      let slider = document.getElementById("radioVolume")
+      if(audio) audio.volume = radioState.volume
+      if(slider) slider.value = Math.round(radioState.volume * 100)
+      if(label) label.textContent = `${Math.round(radioState.volume * 100)}%`
+    }
+
+    function radioSetVolume(value){
+      radioState.volume = Math.max(0, Math.min(1, Number(value) / 100))
+      localStorage.setItem("radioVolume", String(radioState.volume))
+      radioApplyVolume()
+    }
+
+    function radioSetPlayButton(){
+      document.getElementById("radioPlayPause").textContent = radioState.playing ? "Ⅱ" : "▶"
+    }
+
+    function radioStationLabel(station){
+      let country = station.countrycode || station.country || "radio"
+      let tags = station.tags ? station.tags.split(",").slice(0, 3).join(", ") : "live"
+      return `${country} · ${tags}`
+    }
+
+    function radioEscape(value){
+      return String(value).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'","&#039;")
+    }
+
+    function radioNormalizeStations(items){
+      let seen = new Set()
+      return items.filter(item => item.name && (item.url_resolved || item.url)).filter(item => {
+        let key = `${item.name}-${item.url_resolved || item.url}`
+        if(seen.has(key)) return false
+        seen.add(key)
+        return true
+      }).slice(0,24)
+    }
+
+    async function radioFetchStations(){
+      let params = new URLSearchParams({hidebroken:"true",order:"clickcount",reverse:"true",limit:"36"})
+      if(radioState.country) params.set("countrycode", radioState.country)
+      if(radioState.query.trim()) params.set("name", radioState.query.trim())
+      let lastError = null
+      for(let host of radioApiHosts){
+        try{
+          let response = await fetch(`${host}/json/stations/search?${params.toString()}`, {headers:{"Accept":"application/json"}})
+          if(!response.ok) throw new Error(`HTTP ${response.status}`)
+          radioState.stations = radioNormalizeStations(await response.json())
+          return
+        }catch(error){
+          lastError = error
+        }
+      }
+      throw lastError || new Error("Nie udało się pobrać stacji.")
+    }
+
+    async function radioLoadStations(playFirst){
+      radioSetStatus("Ładowanie stacji...")
+      try{
+        await radioFetchStations()
+        radioRenderStations()
+        let label = radioState.query || radioState.country || "wybranego świata"
+        radioSetStatus(`Znaleziono ${radioState.stations.length} stacji dla: ${label}.`)
+        if(playFirst && radioState.stations[0]){
+          await radioPlayStation(radioState.stations[0].stationuuid)
+        }
+      }catch(error){
+        document.getElementById("radioStations").innerHTML = `<div class="radio-empty">Nie udało się pobrać stacji. Sprawdź internet i kliknij Odśwież.</div>`
+        radioSetStatus("Problem z katalogiem stacji.")
+      }
+    }
+
+    function radioRenderStations(){
+      let list = document.getElementById("radioStations")
+      if(!radioState.stations.length){
+        list.innerHTML = `<div class="radio-empty">Brak wyników. Spróbuj innej nazwy albo kraju.</div>`
+        return
+      }
+      list.innerHTML = radioState.stations.map(station => {
+        let active = radioState.current && radioState.current.stationuuid === station.stationuuid
+        return `<button class="radio-station ${active ? "active" : ""}" onclick="radioPlayStation('${station.stationuuid}')"><b>${radioEscape(station.name)}</b><span>${radioEscape(radioStationLabel(station))}</span></button>`
+      }).join("")
+    }
+
+    async function radioPlayStation(id){
+      let station = radioState.stations.find(item => item.stationuuid === id)
+      if(!station) return
+      radioState.current = station
+      let audio = radioAudio()
+      audio.src = station.url_resolved || station.url
+      audio.volume = radioState.volume
+      document.getElementById("radioCurrentName").textContent = station.name
+      document.getElementById("radioCurrentMeta").textContent = radioStationLabel(station)
+      radioRenderStations()
+      try{
+        await audio.play()
+        radioState.playing = true
+        radioSetStatus(`Odtwarzam: ${station.name}`)
+      }catch(error){
+        radioState.playing = false
+        radioSetStatus("Przeglądarka zablokowała odtwarzanie albo stream nie odpowiada. Dotknij stację jeszcze raz.")
+      }
+      radioSetPlayButton()
+    }
+
+    async function radioTogglePlay(){
+      let audio = radioAudio()
+      if(!radioState.current){
+        if(radioState.stations[0]) radioPlayStation(radioState.stations[0].stationuuid)
+        return
+      }
+      if(audio.paused){
+        try{
+          await audio.play()
+          radioState.playing = true
+        }catch(error){
+          radioSetStatus("Nie mogę wznowić streamu. Wybierz stację ponownie.")
+        }
+      }else{
+        audio.pause()
+        radioState.playing = false
+      }
+      radioSetPlayButton()
+      radioRenderStations()
+    }
+
+    function radioStop(){
+      let audio = radioAudio()
+      audio.pause()
+      audio.removeAttribute("src")
+      audio.load()
+      radioState.current = null
+      radioState.playing = false
+      document.getElementById("radioCurrentName").textContent = "Wybierz stację"
+      document.getElementById("radioCurrentMeta").textContent = "Odtwarzanie zatrzymane."
+      radioSetPlayButton()
+      radioRenderStations()
+    }
+
+    async function radioCast(){
+      if(!radioState.current){
+        if(radioState.stations[0]) await radioPlayStation(radioState.stations[0].stationuuid)
+        else return radioSetStatus("Najpierw wybierz stację.")
+      }
+      if(!radioState.castReady) radioInitializeCastApi()
+      if(!radioState.castReady || !window.cast || !window.chrome || !chrome.cast){
+        return radioSetStatus("Cast nie jest dostępny w tej przeglądarce. Spróbuj w Chrome na Androidzie lub Chrome na komputerze.")
+      }
+      try{
+        radioSetStatus("Wybierz urządzenie Cast z listy.")
+        let context = cast.framework.CastContext.getInstance()
+        let session = context.getCurrentSession() || await context.requestSession()
+        await radioLoadCastMedia(session)
+        radioAudio().pause()
+        radioState.playing = false
+        radioSetPlayButton()
+        radioSetStatus(`Wysłano na Cast: ${radioState.current.name}`)
+      }catch(error){
+        radioSetStatus("Cast anulowany albo urządzenie nie przyjęło tego streamu.")
+      }
+    }
+
+    function radioCastContentType(station){
+      let codec = String(station.codec || "").toLowerCase()
+      let url = String(station.url_resolved || station.url || "").toLowerCase()
+      if(codec.includes("aac") || url.includes(".aac")) return "audio/aac"
+      if(codec.includes("ogg") || url.includes(".ogg")) return "audio/ogg"
+      if(codec.includes("opus") || url.includes(".opus")) return "audio/ogg"
+      if(codec.includes("flac") || url.includes(".flac")) return "audio/flac"
+      if(codec.includes("wav") || url.includes(".wav")) return "audio/wav"
+      return "audio/mpeg"
+    }
+
+    function radioLoadCastMedia(session){
+      let station = radioState.current
+      let mediaInfo = new chrome.cast.media.MediaInfo(station.url_resolved || station.url, radioCastContentType(station))
+      mediaInfo.metadata = new chrome.cast.media.MusicTrackMediaMetadata()
+      mediaInfo.metadata.title = station.name
+      mediaInfo.metadata.artist = radioStationLabel(station)
+      mediaInfo.streamType = chrome.cast.media.StreamType.LIVE
+      let request = new chrome.cast.media.LoadRequest(mediaInfo)
+      request.autoplay = true
+      request.currentTime = 0
+      return session.loadMedia(request)
+    }
+
+    function radioSetCountry(country){
+      radioState.country = country
+      radioSyncCountryButtons()
+      radioLoadStations()
+    }
+
+    function radioSyncCountryButtons(){
+      let ids = {PL:"radioCountryPL",SE:"radioCountrySE","":"radioCountryOther"}
+      Object.entries(ids).forEach(([country,id]) => {
+        document.getElementById(id).classList.toggle("active", radioState.country === country)
+      })
+    }
+
+    let radioSearchTimer = null
+    function radioSearchChanged(value){
+      radioState.query = value
+      clearTimeout(radioSearchTimer)
+      radioSearchTimer = setTimeout(radioLoadStations, 350)
+    }
+
+    function radioQuick(query,country){
+      radioState.query = query
+      radioState.country = country
+      document.getElementById("radioSearch").value = query
+      radioSyncCountryButtons()
+      radioLoadStations(true)
+    }
+
+    radioApplyVolume()
+    radioLoadStations()
+
+    if("serviceWorker" in navigator){
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js")
+      })
+    }
+  </script>
+</body>
+</html>
