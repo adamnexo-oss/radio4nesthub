@@ -1,11 +1,14 @@
-const CACHE_NAME = "radio4nesthub-v1"
+const CACHE_NAME = "radio4nesthub-v2"
 const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.json",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
-  "/apple-touch-icon.png"
+  "/icons/favicon-32.png",
+  "/icons/apple-touch-icon-180.png",
+  "/icons/apple-touch-icon-167.png",
+  "/icons/apple-touch-icon-152.png"
 ]
 
 self.addEventListener("install", event => {
