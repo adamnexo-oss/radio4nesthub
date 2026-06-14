@@ -38,7 +38,7 @@
       width:min(900px,100%);
       height:100vh;
       margin:auto;
-      padding:10px;
+      padding:8px;
       display:flex;
       flex-direction:column;
       overflow:hidden;
@@ -47,17 +47,18 @@
       display:flex;
       align-items:center;
       gap:10px;
-      margin:4px 0 8px;
+      margin:2px 0 6px;
     }
     .radio-header h1{
       margin:0;
-      font-size:28px;
+      font-size:22px;
+      font-weight:600;
       line-height:1;
     }
     .radio-header p{
-      margin:5px 0 0;
+      margin:3px 0 0;
       color:rgba(255,255,255,.72);
-      font-size:15px;
+      font-size:13px;
     }
     .card{
       background:#1e293b;
@@ -65,19 +66,19 @@
       box-shadow:0 4px 15px rgba(0,0,0,.3);
     }
     .radio-player{
-      padding:12px;
-      margin:6px 0;
+      padding:10px;
+      margin:5px 0;
     }
     .radio-now{
       display:grid;
-      grid-template-columns:74px minmax(0,1fr);
-      gap:12px;
+      grid-template-columns:52px minmax(0,1fr) auto;
+      gap:9px;
       align-items:center;
     }
     .radio-art{
-      width:74px;
-      height:74px;
-      border-radius:16px;
+      width:52px;
+      height:52px;
+      border-radius:12px;
       display:grid;
       place-items:center;
       overflow:hidden;
@@ -94,7 +95,7 @@
       display:block;
     }
     .radio-art-fallback{
-      font-size:34px;
+      font-size:25px;
       filter:drop-shadow(0 2px 7px rgba(0,0,0,.28));
     }
     .radio-art.playing::before,
@@ -108,20 +109,21 @@
     }
     .radio-art.playing::after{animation-delay:.55s}
     .radio-label{
-      margin:0 0 6px;
+      margin:0 0 4px;
       color:#facc15;
-      font-size:12px;
-      font-weight:bold;
+      font-size:11px;
+      font-weight:600;
       text-transform:uppercase;
     }
     .radio-player h2{
       margin:0;
-      font-size:24px;
+      font-size:20px;
+      font-weight:600;
     }
     .radio-player p{
-      margin:6px 0;
+      margin:4px 0;
       color:rgba(255,255,255,.74);
-      font-size:14px;
+      font-size:13px;
     }
     button{
       border:0;
@@ -130,22 +132,31 @@
       color:white;
       cursor:pointer;
       font:inherit;
-      font-weight:700;
-      padding:10px;
+      font-weight:500;
+      padding:8px;
     }
     .radio-controls{
       display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:6px;
-      margin-top:10px;
+      grid-template-columns:34px 34px;
+      gap:5px;
+      margin-top:0;
+      align-self:center;
     }
-    .radio-controls button:nth-child(n+3){
-      grid-column:1 / -1;
+    .radio-controls button{
+      width:34px;
+      height:30px;
+      min-width:0;
+      padding:0;
+      border-radius:8px;
+      display:grid;
+      place-items:center;
+      font-size:13px;
+      line-height:1;
     }
     #radioPlayPause{
       background:#34d399;
       color:#062014;
-      font-size:18px;
+      font-size:15px;
     }
     .radio-volume{
       display:grid;
@@ -153,12 +164,12 @@
       gap:8px;
       align-items:center;
       background:#1e293b;
-      padding:8px 10px;
-      margin:6px 0;
-      border-radius:12px;
+      padding:7px 10px;
+      margin:5px 0;
+      border-radius:10px;
       box-shadow:0 4px 15px rgba(0,0,0,.22);
     }
-    .radio-volume span,.radio-volume b{font-size:13px}
+    .radio-volume span,.radio-volume b{font-size:12px}
     .radio-volume input{
       width:100%;
       margin:0;
@@ -166,9 +177,9 @@
     }
     .radio-search{
       width:100%;
-      padding:10px 12px;
-      margin:5px 0 6px;
-      font-size:16px;
+      padding:9px 11px;
+      margin:5px 0;
+      font-size:14px;
       border:0;
       border-radius:10px;
     }
@@ -195,18 +206,18 @@
       display:grid;
       grid-template-columns:repeat(2,1fr);
       gap:6px;
-      margin:8px 0;
+      margin:6px 0;
     }
     .radio-group-title{
-      margin:10px 0 6px;
+      margin:8px 0 5px;
       color:rgba(255,255,255,.75);
-      font-size:13px;
-      font-weight:bold;
+      font-size:12px;
+      font-weight:600;
     }
     .radio-status{
-      margin:8px 0;
+      margin:7px 0;
       color:rgba(255,255,255,.72);
-      font-size:13px;
+      font-size:12px;
     }
     .radio-grid{
       display:grid;
@@ -214,12 +225,12 @@
       gap:8px;
     }
     .radio-station{
-      min-height:72px;
-      padding:10px;
+      min-height:62px;
+      padding:8px;
       text-align:left;
       display:grid;
-      grid-template-columns:48px minmax(0,1fr);
-      gap:10px;
+      grid-template-columns:40px minmax(0,1fr);
+      gap:8px;
       align-items:center;
     }
     .radio-station.active{
@@ -228,23 +239,24 @@
     }
     .radio-station b{
       display:block;
-      margin-bottom:6px;
-      font-size:16px;
+      margin-bottom:4px;
+      font-size:14px;
+      font-weight:600;
     }
     .radio-station span{
       color:rgba(255,255,255,.7);
-      font-size:12px;
+      font-size:11px;
     }
     .station-logo{
-      width:48px;
-      height:48px;
-      border-radius:12px;
+      width:40px;
+      height:40px;
+      border-radius:10px;
       display:grid;
       place-items:center;
       overflow:hidden;
       background:linear-gradient(135deg,#38bdf8,#1d4ed8 58%,#facc15);
       color:white;
-      font-size:24px;
+      font-size:21px;
     }
     .station-logo img{
       width:100%;
@@ -281,13 +293,24 @@
       color:rgba(255,255,255,.75);
     }
     @media (min-width:680px){
-      .radio-controls{grid-template-columns:58px 58px 1fr 1fr}
-      .radio-controls button:nth-child(n+3){grid-column:auto}
+      .radio-controls{grid-template-columns:42px 42px 46px 42px}
+      .radio-controls button{width:100%;height:34px;font-size:14px}
       .radio-quick{grid-template-columns:repeat(3,1fr)}
       .radio-grid{grid-template-columns:repeat(2,1fr)}
-      .radio-player h2{font-size:28px}
-      .radio-now{grid-template-columns:92px minmax(0,1fr)}
-      .radio-art{width:92px;height:92px}
+      .radio-app{padding:12px}
+      .radio-header h1{font-size:28px}
+      .radio-header p{font-size:15px}
+      .radio-player{padding:12px}
+      .radio-player h2{font-size:24px}
+      .radio-player p{font-size:14px}
+      .radio-now{grid-template-columns:72px minmax(0,1fr) auto}
+      .radio-art{width:72px;height:72px}
+    }
+    @media (min-width:1100px){
+      .radio-app{width:min(960px,100%);padding:14px}
+      .radio-player h2{font-size:26px}
+      .radio-now{grid-template-columns:82px minmax(0,1fr) auto}
+      .radio-art{width:82px;height:82px}
     }
     @keyframes radioPulse{
       0%{transform:scale(.55);opacity:.85}
@@ -318,12 +341,12 @@
           <h2 id="radioCurrentName">Wybierz stację</h2>
           <p id="radioCurrentMeta">Dotknij stacji albo użyj szybkich przycisków.</p>
         </div>
-      </div>
-      <div class="radio-controls">
-        <button id="radioPlayPause" onclick="radioTogglePlay()">▶</button>
-        <button onclick="radioStop()">■</button>
-        <button onclick="radioCast()">Cast</button>
-        <button onclick="radioLoadStations()">Odśwież</button>
+        <div class="radio-controls">
+          <button id="radioPlayPause" onclick="radioTogglePlay()" aria-label="Odtwórz albo pauza" title="Odtwórz / pauza">▶</button>
+          <button onclick="radioStop()" aria-label="Stop" title="Stop">■</button>
+          <button onclick="radioCast()" aria-label="Cast" title="Cast">Cast</button>
+          <button onclick="radioLoadStations(false, true)" aria-label="Odśwież" title="Odśwież">↻</button>
+        </div>
       </div>
     </section>
 
@@ -390,7 +413,7 @@
       stations:[],
       current:null,
       playing:false,
-      volume:Number(localStorage.getItem("radioVolume")) || 0.8,
+      volume:localStorage.getItem("radioVolume") === null ? 0.8 : Number(localStorage.getItem("radioVolume")),
       castReady:false
     }
 
@@ -420,12 +443,37 @@
       if(audio) audio.volume = radioState.volume
       if(slider) slider.value = Math.round(radioState.volume * 100)
       if(label) label.textContent = `${Math.round(radioState.volume * 100)}%`
+      radioApplyCastVolume()
     }
 
     function radioSetVolume(value){
       radioState.volume = Math.max(0, Math.min(1, Number(value) / 100))
       localStorage.setItem("radioVolume", String(radioState.volume))
       radioApplyVolume()
+    }
+
+    function radioCurrentCastSession(){
+      if(!window.cast || !cast.framework) return null
+      return cast.framework.CastContext.getInstance().getCurrentSession()
+    }
+
+    async function radioApplyCastVolume(){
+      let session = radioCurrentCastSession()
+      if(!session) return
+
+      try{
+        if(typeof session.setVolume === "function"){
+          await session.setVolume(radioState.volume)
+          return
+        }
+
+        let rawSession = typeof session.getSessionObj === "function" ? session.getSessionObj() : null
+        if(rawSession && typeof rawSession.setReceiverVolumeLevel === "function"){
+          rawSession.setReceiverVolumeLevel(radioState.volume, () => {}, () => {})
+        }
+      }catch(error){
+        radioSetStatus("Nie udało się zmienić głośności Nest Hub.")
+      }
     }
 
     function radioSetPlayButton(){
@@ -488,14 +536,18 @@
       }).slice(0,24)
     }
 
-    async function radioFetchStations(){
+    async function radioFetchStations(forceRefresh){
       let params = new URLSearchParams({hidebroken:"true",order:"clickcount",reverse:"true",limit:"36"})
       if(radioState.country) params.set("countrycode", radioState.country)
       if(radioState.query.trim()) params.set("name", radioState.query.trim())
+      if(forceRefresh) params.set("_", String(Date.now()))
       let lastError = null
       for(let host of radioApiHosts){
         try{
-          let response = await fetch(`${host}/json/stations/search?${params.toString()}`, {headers:{"Accept":"application/json"}})
+          let response = await fetch(`${host}/json/stations/search?${params.toString()}`, {
+            cache:"no-store",
+            headers:{"Accept":"application/json"}
+          })
           if(!response.ok) throw new Error(`HTTP ${response.status}`)
           radioState.stations = radioNormalizeStations(await response.json())
           return
@@ -506,13 +558,13 @@
       throw lastError || new Error("Nie udało się pobrać stacji.")
     }
 
-    async function radioLoadStations(playFirst){
-      radioSetStatus("Ładowanie stacji...")
+    async function radioLoadStations(playFirst, forceRefresh){
+      radioSetStatus(forceRefresh ? "Odświeżanie stacji..." : "Ładowanie stacji...")
       try{
-        await radioFetchStations()
+        await radioFetchStations(forceRefresh)
         radioRenderStations()
         let label = radioState.query || radioState.country || "wybranego świata"
-        radioSetStatus(`Znaleziono ${radioState.stations.length} stacji dla: ${label}.`)
+        radioSetStatus(`${forceRefresh ? "Odświeżono" : "Znaleziono"} ${radioState.stations.length} stacji dla: ${label}.`)
         if(playFirst && radioState.stations[0]){
           await radioPlayStation(radioState.stations[0].stationuuid)
         }
@@ -607,6 +659,7 @@
         let context = cast.framework.CastContext.getInstance()
         let session = context.getCurrentSession() || await context.requestSession()
         await radioLoadCastMedia(session)
+        await radioApplyCastVolume()
         radioAudio().pause()
         radioState.playing = false
         radioSetPlayButton()
