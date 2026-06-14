@@ -406,7 +406,28 @@
       "https://nl1.api.radio-browser.info",
       "https://at1.api.radio-browser.info"
     ]
-    const radioHostedArtwork = "https://radio4nesthub.web.app/icons/icon-512.png"
+    const radioHostedOrigin = "https://radio4nesthub.web.app"
+    const radioHostedArtwork = `${radioHostedOrigin}/icons/icon-512.png`
+    const radioLocalArtworkRules = [
+      {file:"rmf-3city.png", terms:["rmf maxx","rmf 3city","rmf maxxx"]},
+      {file:"rmf-fm.png", terms:["rmf fm"]},
+      {file:"radio-zet.png", terms:["radio zet"]},
+      {file:"tok-fm.png", terms:["tok fm"]},
+      {file:"jedynka.jpg", terms:["polskie radio jedynka","jedynka"]},
+      {file:"radio-gdansk.png", terms:["radio gdansk"]},
+      {file:"eska-3city.png", terms:["eska trojmiasto","eska 3city","eska"]},
+      {file:"plus-gdansk.png", terms:["radio plus gdansk","plus gdansk"]},
+      {file:"zlote-gdansk.png", terms:["zlote przeboje","zlote gdansk"]},
+      {file:"pogoda-gdansk.png", terms:["radio pogoda gdansk","pogoda gdansk","radio pogoda"]},
+      {file:"p4-gotland.png", terms:["sveriges radio p4 gotland","p4 gotland"]},
+      {file:"p4-stockholm.png", terms:["sveriges radio p4 stockholm","p4 stockholm"]},
+      {file:"nrj-stockholm.png", terms:["nrj stockholm"]},
+      {file:"nrj-sweden.png", terms:["nrj sweden","nrj"]},
+      {file:"sr-p2-klassisk.png", terms:["sveriges radio p2 klassisk","sr p2 klassisk","p2 klassisk"]},
+      {file:"klassisk-musik.png", terms:["klassisk musik"]},
+      {file:"sr-p1.png", terms:["sveriges radio p1","sr p1"]},
+      {file:"sr-p3.png", terms:["sveriges radio p3","sr p3"]}
+    ]
 
     let radioState = {
       country:"PL",
@@ -488,8 +509,28 @@
       return `${country} · ${tags}`
     }
 
-    function radioAppArtwork(){
-      if(location.protocol === "https:" && location.host){
+    function radioNormalizeName(value){
+      return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    }
+
+    function radioLocalArtworkUrl(file, forceHosted){
+      if(forceHosted) return `${radioHostedOrigin}/iconsradio/${file}`
+      if(location.protocol === "file:") return `iconsradio/${file}`
+      if(location.host) return `${location.origin}/iconsradio/${file}`
+      return `${radioHostedOrigin}/iconsradio/${file}`
+    }
+
+    function radioLocalArtwork(station, forceHosted){
+      let name = radioNormalizeName(station && station.name)
+      let rule = radioLocalArtworkRules.find(item => item.terms.some(term => name.includes(term)))
+      return rule ? radioLocalArtworkUrl(rule.file, forceHosted) : ""
+    }
+
+    function radioAppArtwork(forceHosted){
+      if(!forceHosted && location.protocol === "file:"){
+        return "icons/icon-512.png"
+      }
+      if(!forceHosted && location.host){
         return `${location.origin}/icons/icon-512.png`
       }
       return radioHostedArtwork
@@ -504,10 +545,12 @@
       }
     }
 
-    function radioStationArtwork(station, useFallback){
+    function radioStationArtwork(station, useFallback, forceHosted){
+      let localArt = radioLocalArtwork(station, forceHosted)
+      if(localArt) return localArt
       let url = String(station && station.favicon ? station.favicon : "").trim()
-      if(!url || !url.startsWith("https://")) return useFallback ? radioAppArtwork() : ""
-      if(radioArtworkMayFailOnCast(url)) return useFallback ? radioAppArtwork() : ""
+      if(!url || !url.startsWith("https://")) return useFallback ? radioAppArtwork(forceHosted) : ""
+      if(radioArtworkMayFailOnCast(url)) return useFallback ? radioAppArtwork(forceHosted) : ""
       return url
     }
 
@@ -704,7 +747,7 @@
       mediaInfo.metadata = new chrome.cast.media.MusicTrackMediaMetadata()
       mediaInfo.metadata.title = station.name
       mediaInfo.metadata.artist = radioStationLabel(station)
-      mediaInfo.metadata.images = [new chrome.cast.Image(radioStationArtwork(station, true))]
+      mediaInfo.metadata.images = [new chrome.cast.Image(radioStationArtwork(station, true, true))]
       mediaInfo.streamType = chrome.cast.media.StreamType.LIVE
       let request = new chrome.cast.media.LoadRequest(mediaInfo)
       request.autoplay = true

@@ -1,4 +1,4 @@
-const CACHE_NAME = "radio4nesthub-v7"
+const CACHE_NAME = "radio4nesthub-v9"
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -8,7 +8,25 @@ const APP_SHELL = [
   "/icons/favicon-32.png",
   "/icons/apple-touch-icon-180.png",
   "/icons/apple-touch-icon-167.png",
-  "/icons/apple-touch-icon-152.png"
+  "/icons/apple-touch-icon-152.png",
+  "/iconsradio/rmf-fm.png",
+  "/iconsradio/radio-zet.png",
+  "/iconsradio/tok-fm.png",
+  "/iconsradio/jedynka.jpg",
+  "/iconsradio/sr-p1.png",
+  "/iconsradio/sr-p3.png",
+  "/iconsradio/radio-gdansk.png",
+  "/iconsradio/eska-3city.png",
+  "/iconsradio/plus-gdansk.png",
+  "/iconsradio/zlote-gdansk.png",
+  "/iconsradio/rmf-3city.png",
+  "/iconsradio/pogoda-gdansk.png",
+  "/iconsradio/p4-gotland.png",
+  "/iconsradio/p4-stockholm.png",
+  "/iconsradio/nrj-sweden.png",
+  "/iconsradio/nrj-stockholm.png",
+  "/iconsradio/sr-p2-klassisk.png",
+  "/iconsradio/klassisk-musik.png"
 ]
 
 self.addEventListener("install", event => {
