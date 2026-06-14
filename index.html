@@ -137,26 +137,26 @@
     }
     .radio-controls{
       display:grid;
-      grid-template-columns:34px 34px;
-      gap:5px;
+      grid-template-columns:44px 44px;
+      gap:7px;
       margin-top:0;
       align-self:center;
     }
     .radio-controls button{
-      width:34px;
-      height:30px;
+      width:44px;
+      height:39px;
       min-width:0;
       padding:0;
       border-radius:8px;
       display:grid;
       place-items:center;
-      font-size:13px;
+      font-size:15px;
       line-height:1;
     }
     #radioPlayPause{
       background:#34d399;
       color:#062014;
-      font-size:15px;
+      font-size:17px;
     }
     .radio-volume{
       display:grid;
@@ -293,8 +293,8 @@
       color:rgba(255,255,255,.75);
     }
     @media (min-width:680px){
-      .radio-controls{grid-template-columns:42px 42px 46px 42px}
-      .radio-controls button{width:100%;height:34px;font-size:14px}
+      .radio-controls{grid-template-columns:54px 54px 64px 54px}
+      .radio-controls button{width:100%;height:44px;font-size:16px}
       .radio-quick{grid-template-columns:repeat(3,1fr)}
       .radio-grid{grid-template-columns:repeat(2,1fr)}
       .radio-app{padding:12px}
@@ -406,6 +406,7 @@
       "https://nl1.api.radio-browser.info",
       "https://at1.api.radio-browser.info"
     ]
+    const radioHostedArtwork = "https://radio4nesthub.web.app/icons/icon-512.png"
 
     let radioState = {
       country:"PL",
@@ -487,9 +488,26 @@
       return `${country} · ${tags}`
     }
 
-    function radioStationArtwork(station){
+    function radioAppArtwork(){
+      if(location.protocol === "https:" && location.host){
+        return `${location.origin}/icons/icon-512.png`
+      }
+      return radioHostedArtwork
+    }
+
+    function radioArtworkMayFailOnCast(url){
+      try{
+        let host = new URL(url).hostname.replace(/^www\./, "")
+        return host === "radiopogoda.pl"
+      }catch(error){
+        return true
+      }
+    }
+
+    function radioStationArtwork(station, useFallback){
       let url = String(station && station.favicon ? station.favicon : "").trim()
-      if(!url || !url.startsWith("https://")) return ""
+      if(!url || !url.startsWith("https://")) return useFallback ? radioAppArtwork() : ""
+      if(radioArtworkMayFailOnCast(url)) return useFallback ? radioAppArtwork() : ""
       return url
     }
 
@@ -514,9 +532,9 @@
         return
       }
 
-      let art = radioStationArtwork(station)
+      let art = radioStationArtwork(station, true)
       if(art){
-        box.innerHTML = `<img src="${radioEscape(art)}" alt="">`
+        box.innerHTML = `<img src="${radioEscape(art)}" alt="" onerror="this.replaceWith(document.createTextNode('${radioFallbackIcon(station)}'))">`
       }else{
         box.innerHTML = `<span class="radio-art-fallback">${radioFallbackIcon(station)}</span>`
       }
@@ -582,8 +600,8 @@
       }
       list.innerHTML = radioState.stations.map(station => {
         let active = radioState.current && radioState.current.stationuuid === station.stationuuid
-        let art = radioStationArtwork(station)
-        let logo = art ? `<img src="${radioEscape(art)}" alt="">` : `<span>${radioFallbackIcon(station)}</span>`
+        let art = radioStationArtwork(station, true)
+        let logo = art ? `<img src="${radioEscape(art)}" alt="" onerror="this.replaceWith(document.createTextNode('${radioFallbackIcon(station)}'))">` : `<span>${radioFallbackIcon(station)}</span>`
         return `<button class="radio-station ${active ? "active" : ""}" onclick="radioPlayStation('${station.stationuuid}')"><span class="station-logo">${logo}</span><span class="station-text"><b>${radioEscape(station.name)}</b><span>${radioEscape(radioStationLabel(station))}</span><span class="station-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span></button>`
       }).join("")
     }
@@ -686,10 +704,7 @@
       mediaInfo.metadata = new chrome.cast.media.MusicTrackMediaMetadata()
       mediaInfo.metadata.title = station.name
       mediaInfo.metadata.artist = radioStationLabel(station)
-      let art = radioStationArtwork(station)
-      if(art){
-        mediaInfo.metadata.images = [new chrome.cast.Image(art)]
-      }
+      mediaInfo.metadata.images = [new chrome.cast.Image(radioStationArtwork(station, true))]
       mediaInfo.streamType = chrome.cast.media.StreamType.LIVE
       let request = new chrome.cast.media.LoadRequest(mediaInfo)
       request.autoplay = true
