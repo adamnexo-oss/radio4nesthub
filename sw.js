@@ -1,4 +1,4 @@
-const CACHE_NAME = "radio4nesthub-v12"
+const CACHE_NAME = "radio4nesthub-v13"
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -12,8 +12,11 @@ const APP_SHELL = [
   "/icons/apple-touch-icon-167.png",
   "/icons/apple-touch-icon-152.png",
   "/iconsradio/rmf-fm.png",
+  "/iconsradio/rmf-classic.png",
   "/iconsradio/radio-zet.png",
   "/iconsradio/tok-fm.png",
+  "/iconsradio/radio-chopin.jpg",
+  "/iconsradio/radio-dwojka.jpg",
   "/iconsradio/jedynka.jpg",
   "/iconsradio/sr-p1.png",
   "/iconsradio/sr-p3.png",

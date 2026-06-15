@@ -12,11 +12,58 @@ const radioApiHosts = [
 ]
 const radioHostedOrigin = "https://radio4nesthub.web.app"
 const radioHostedArtwork = `${radioHostedOrigin}/icons/icon-512.png`
+const radioStreamOverrides = [
+  {
+    terms:["rmf classic"],
+    url:"https://rs9-krk2.rmfstream.pl/rmf_classic",
+    codec:"MP3",
+    bitrate:128
+  },
+  {
+    terms:["sveriges radio - p2 klassiskt","sveriges radio p2 klassiskt","sveriges radio p2","sr p2","p2 klassiskt","p2 klassisk"],
+    url:"https://live1.sr.se/p2-mp3-192",
+    codec:"MP3",
+    bitrate:192
+  }
+]
+const radioPresetStations = [
+  {
+    stationuuid:"preset-rmf-classic",
+    name:"RMF Classic",
+    countrycode:"PL",
+    country:"PL",
+    tags:"classical, music",
+    url:"https://rs9-krk2.rmfstream.pl/rmf_classic",
+    url_resolved:"https://rs9-krk2.rmfstream.pl/rmf_classic",
+    codec:"MP3",
+    bitrate:128,
+    lastcheckok:1,
+    preset:true,
+    aliases:["rmf classic","radio rmf classic"]
+  },
+  {
+    stationuuid:"preset-sr-p2-klassisk",
+    name:"Sveriges Radio - P2 Klassiskt",
+    countrycode:"SE",
+    country:"SE",
+    tags:"classical, music",
+    url:"https://live1.sr.se/p2-mp3-192",
+    url_resolved:"https://live1.sr.se/p2-mp3-192",
+    codec:"MP3",
+    bitrate:192,
+    lastcheckok:1,
+    preset:true,
+    aliases:["sveriges radio - p2 klassiskt","sveriges radio p2 klassiskt","sveriges radio p2","sr p2","p2 klassiskt","p2 klassisk"]
+  }
+]
 const radioLocalArtworkRules = [
+  {file:"rmf-classic.png", terms:["rmf classic","radio rmf classic"]},
   {file:"rmf-3city.png", terms:["rmf maxx","rmf 3city","rmf maxxx"]},
   {file:"rmf-fm.png", terms:["rmf fm"]},
   {file:"radio-zet.png", terms:["radio zet"]},
   {file:"tok-fm.png", terms:["tok fm"]},
+  {file:"radio-chopin.jpg", terms:["radio chopin","polskie radio - chopin","polskie radio chopin"]},
+  {file:"radio-dwojka.jpg", terms:["radio dwojka","dwojka","dwójka","polskie radio program 2","polskie radio 2"]},
   {file:"jedynka.jpg", terms:["polskie radio jedynka","jedynka"]},
   {file:"radio-gdansk.png", terms:["radio gdansk"]},
   {file:"eska-3city.png", terms:["eska trojmiasto","eska 3city","eska"]},
@@ -27,7 +74,7 @@ const radioLocalArtworkRules = [
   {file:"p4-stockholm.png", terms:["sveriges radio p4 stockholm","p4 stockholm"]},
   {file:"nrj-stockholm.png", terms:["nrj stockholm"]},
   {file:"nrj-sweden.png", terms:["nrj sweden","nrj"]},
-  {file:"sr-p2-klassisk.png", terms:["sveriges radio p2 klassisk","sr p2 klassisk","p2 klassisk"]},
+  {file:"sr-p2-klassisk.png", terms:["sveriges radio - p2 klassiskt","sveriges radio p2 klassiskt","sveriges radio p2","sr p2 klassisk","p2 klassiskt","p2 klassisk"]},
   {file:"klassisk-musik.png", terms:["klassisk musik"]},
   {file:"sr-p1.png", terms:["sveriges radio p1","sr p1"]},
   {file:"sr-p3.png", terms:["sveriges radio p3","sr p3"]}
@@ -44,6 +91,8 @@ let radioState = {
   castListenerAttached:false,
   casting:false,
   playRequestId:0,
+  stationLoadRequestId:0,
+  wantsPlay:false,
   bufferTimer:null
 }
 
@@ -94,6 +143,14 @@ function radioPrepareAudio(){
   audio.addEventListener("stalled", () => {
     if(radioState.current && !radioState.casting){
       radioSetStatus("Stream zwolnił. Czekam na dane audio...")
+    }
+  })
+
+  audio.addEventListener("canplay", () => {
+    if(radioState.current && !radioState.casting && radioState.wantsPlay && !radioState.playing && audio.paused){
+      audio.play().catch(() => {
+        radioSetStatus("Dotknij ▶, jeśli stacja nie wystartowała.")
+      })
     }
   })
 
@@ -261,6 +318,38 @@ function radioStationArtwork(station, useFallback, forceHosted){
   return url
 }
 
+function radioApplyStreamOverride(station){
+  let name = radioNormalizeName(station && station.name)
+  let override = radioStreamOverrides.find(item => item.terms.some(term => name.includes(term)))
+  if(!override) return station
+
+  return {
+    ...station,
+    url:override.url,
+    url_resolved:override.url,
+    codec:override.codec || station.codec,
+    bitrate:override.bitrate || station.bitrate,
+    lastcheckok:1
+  }
+}
+
+function radioStationSearchTerms(station){
+  return [station && station.name, ...((station && station.aliases) || [])].map(radioNormalizeName).filter(Boolean)
+}
+
+function radioStationMatchesQuery(station, query){
+  if(!query) return false
+  return radioStationSearchTerms(station).some(term => term.includes(query) || query.includes(term))
+}
+
+function radioPresetMatches(query, country){
+  let normalizedQuery = radioNormalizeName(query)
+  return radioPresetStations.filter(station => {
+    if(country && station.countrycode !== country) return false
+    return radioStationMatchesQuery(station, normalizedQuery)
+  }).map(station => ({...station}))
+}
+
 function radioFallbackIcon(station){
   let name = String(station && station.name ? station.name : "").toLowerCase()
   if(name.includes("pogoda")) return "☀️"
@@ -296,7 +385,7 @@ function radioEscape(value){
 
 function radioNormalizeStations(items){
   let seen = new Set()
-  return items.filter(item => item.name && (item.url_resolved || item.url)).filter(item => {
+  return items.map(radioApplyStreamOverride).filter(item => item.name && (item.url_resolved || item.url)).filter(item => {
     let key = `${item.name}-${item.url_resolved || item.url}`
     if(seen.has(key)) return false
     seen.add(key)
@@ -318,8 +407,10 @@ function radioStationScore(station){
   }
 
   if(station.lastcheckok) score += 20
+  if(station.preset) score += 120
   if(Number(station.bitrate) >= 96) score += 8
   if(String(station.codec || "").toLowerCase().includes("mp3")) score += 5
+  if(radioStreamOverrides.some(item => item.terms.some(term => name.includes(term)))) score += 80
   if(url.startsWith("https://")) score += 30
   if(/^http:\/\/\d+\./.test(String(station.url_resolved || station.url || "").toLowerCase())) score -= 70
   if(homepage.includes("onlineradiobox") || url.includes("onlineradiobox")) score -= 35
@@ -341,8 +432,8 @@ async function radioFetchStations(forceRefresh){
         headers:{"Accept":"application/json"}
       })
       if(!response.ok) throw new Error(`HTTP ${response.status}`)
-      radioState.stations = radioNormalizeStations(await response.json())
-      return
+      let data = await response.json()
+      return radioNormalizeStations([...radioPresetMatches(radioState.query, radioState.country), ...data])
     }catch(error){
       lastError = error
     }
@@ -351,9 +442,12 @@ async function radioFetchStations(forceRefresh){
 }
 
 async function radioLoadStations(playFirst, forceRefresh){
+  let loadRequestId = ++radioState.stationLoadRequestId
   radioSetStatus(forceRefresh ? "Odświeżanie stacji..." : "Ładowanie stacji...")
   try{
-    await radioFetchStations(forceRefresh)
+    let stations = await radioFetchStations(forceRefresh)
+    if(loadRequestId !== radioState.stationLoadRequestId) return
+    radioState.stations = stations
     radioRenderStations()
     let label = radioState.query || radioState.country || "wybranego świata"
     radioSetStatus(`${forceRefresh ? "Odświeżono" : "Znaleziono"} ${radioState.stations.length} stacji dla: ${label}.`)
@@ -361,6 +455,7 @@ async function radioLoadStations(playFirst, forceRefresh){
       await radioPlayStation(radioState.stations[0].stationuuid)
     }
   }catch(error){
+    if(loadRequestId !== radioState.stationLoadRequestId) return
     document.getElementById("radioStations").innerHTML = `<div class="radio-empty">Nie udało się pobrać stacji. Sprawdź internet i kliknij Odśwież.</div>`
     radioSetStatus("Problem z katalogiem stacji.")
   }
@@ -406,6 +501,7 @@ async function radioPlayStationLocal(station, requestId, useFallbackUrl){
   radioPrepareAudio()
   radioState.casting = false
   radioState.playing = false
+  radioState.wantsPlay = true
   radioSetPlayButton()
   radioClearBufferTimer()
   radioSetStatus(`Łączenie i buforowanie: ${station.name}`)
@@ -433,6 +529,7 @@ async function radioPlayStationLocal(station, requestId, useFallbackUrl){
     }
     radioClearBufferTimer()
     radioState.playing = false
+    radioState.wantsPlay = false
     radioSetStatus("Przeglądarka zablokowała odtwarzanie albo stream nie odpowiada. Dotknij stację jeszcze raz.")
   }
   radioSetPlayButton()
@@ -477,13 +574,16 @@ async function radioTogglePlay(){
     return
   }
   if(audio.paused){
+    radioState.wantsPlay = true
     try{
       await audio.play()
       radioState.playing = true
     }catch(error){
+      radioState.wantsPlay = false
       radioSetStatus("Nie mogę wznowić streamu. Wybierz stację ponownie.")
     }
   }else{
+    radioState.wantsPlay = false
     audio.pause()
     radioState.playing = false
   }
@@ -498,6 +598,7 @@ function radioStop(){
   radioState.current = null
   radioState.playing = false
   radioState.casting = false
+  radioState.wantsPlay = false
   document.getElementById("radioCurrentName").textContent = "Wybierz stację"
   document.getElementById("radioCurrentMeta").textContent = "Odtwarzanie zatrzymane."
   radioUpdateArtwork(null)
@@ -604,6 +705,14 @@ function radioQuick(query,country){
   radioState.country = country
   document.getElementById("radioSearch").value = query
   radioSyncCountryButtons()
+  let preset = radioPresetMatches(query, country)[0]
+  if(preset){
+    radioState.stationLoadRequestId += 1
+    radioState.stations = radioNormalizeStations([preset, ...radioState.stations])
+    radioRenderStations()
+    radioPlayStation(preset.stationuuid)
+    return
+  }
   radioLoadStations(true)
 }
 
