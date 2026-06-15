@@ -397,7 +397,7 @@
       <p id="radioStatus" class="radio-status">Ładowanie stacji...</p>
       <div id="radioStations" class="radio-grid"></div>
     </div>
-    <audio id="radioAudio"></audio>
+    <audio id="radioAudio" preload="none" playsinline></audio>
   </main>
 
   <script>
@@ -436,16 +436,26 @@
       current:null,
       playing:false,
       volume:localStorage.getItem("radioVolume") === null ? 0.8 : Number(localStorage.getItem("radioVolume")),
-      castReady:false
+      castReady:false,
+      castListenerAttached:false,
+      casting:false,
+      playRequestId:0,
+      bufferTimer:null
     }
 
     function radioInitializeCastApi(){
       if(!window.cast || !window.chrome || !chrome.cast || radioState.castReady) return
-      cast.framework.CastContext.getInstance().setOptions({
+      let context = cast.framework.CastContext.getInstance()
+      context.setOptions({
         receiverApplicationId:chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
         autoJoinPolicy:chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
       })
+      if(!radioState.castListenerAttached && cast.framework.CastContextEventType){
+        context.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, radioCastSessionChanged)
+        radioState.castListenerAttached = true
+      }
       radioState.castReady = true
+      radioState.casting = !!context.getCurrentSession()
     }
     window.radioInitializeCastApi = radioInitializeCastApi
     if(window.radioCastApiAvailable) radioInitializeCastApi()
@@ -456,6 +466,75 @@
 
     function radioAudio(){
       return document.getElementById("radioAudio")
+    }
+
+    function radioPrepareAudio(){
+      let audio = radioAudio()
+      if(!audio || audio.dataset.radioReady) return
+
+      audio.dataset.radioReady = "1"
+      audio.preload = "none"
+
+      audio.addEventListener("loadstart", () => {
+        if(radioState.current && !radioState.casting){
+          radioSetStatus(`Łączenie i buforowanie: ${radioState.current.name}`)
+        }
+      })
+
+      audio.addEventListener("waiting", () => {
+        if(radioState.current && !radioState.casting){
+          radioSetStatus(`Buforowanie: ${radioState.current.name}`)
+        }
+      })
+
+      audio.addEventListener("stalled", () => {
+        if(radioState.current && !radioState.casting){
+          radioSetStatus("Stream zwolnił. Czekam na dane audio...")
+        }
+      })
+
+      audio.addEventListener("playing", () => {
+        if(radioState.current && !radioState.casting){
+          radioClearBufferTimer()
+          radioState.playing = true
+          radioSetPlayButton()
+          radioRenderStations()
+          radioSetStatus(`Odtwarzam: ${radioState.current.name}`)
+        }
+      })
+
+      audio.addEventListener("pause", () => {
+        if(!radioState.casting){
+          radioState.playing = false
+          radioSetPlayButton()
+          radioRenderStations()
+        }
+      })
+
+      audio.addEventListener("error", () => {
+        if(radioState.current && !radioState.casting){
+          radioClearBufferTimer()
+          radioState.playing = false
+          radioSetPlayButton()
+          radioRenderStations()
+          radioSetStatus("Ten stream nie odpowiedział. Kliknij Odśwież albo wybierz inną stację.")
+        }
+      })
+    }
+
+    function radioClearBufferTimer(){
+      if(radioState.bufferTimer){
+        clearTimeout(radioState.bufferTimer)
+        radioState.bufferTimer = null
+      }
+    }
+
+    function radioStopLocalAudio(){
+      let audio = radioAudio()
+      if(!audio) return
+      audio.pause()
+      audio.removeAttribute("src")
+      audio.load()
     }
 
     function radioApplyVolume(){
@@ -479,6 +558,30 @@
       return cast.framework.CastContext.getInstance().getCurrentSession()
     }
 
+    function radioHasCastSession(){
+      return !!radioCurrentCastSession()
+    }
+
+    function radioCastSessionChanged(event){
+      let state = event && event.sessionState
+      let started = state === cast.framework.SessionState.SESSION_STARTED || state === cast.framework.SessionState.SESSION_RESUMED
+      let ended = state === cast.framework.SessionState.SESSION_ENDED
+
+      if(started){
+        radioState.casting = true
+        radioSetStatus("Połączono z Cast.")
+      }
+
+      if(ended){
+        radioState.casting = false
+        radioState.playing = false
+        radioSetStatus("Cast zakończony.")
+      }
+
+      radioSetPlayButton()
+      radioRenderStations()
+    }
+
     async function radioApplyCastVolume(){
       let session = radioCurrentCastSession()
       if(!session) return
@@ -499,7 +602,7 @@
     }
 
     function radioSetPlayButton(){
-      document.getElementById("radioPlayPause").textContent = radioState.playing ? "Ⅱ" : "▶"
+      document.getElementById("radioPlayPause").textContent = radioState.playing || radioState.casting ? "Ⅱ" : "▶"
       radioUpdateArtwork(radioState.current)
     }
 
@@ -510,7 +613,7 @@
     }
 
     function radioNormalizeName(value){
-      return String(value || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+      return String(value || "").toLowerCase().replace(/ł/g, "l").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
     }
 
     function radioLocalArtworkUrl(file, forceHosted){
@@ -594,7 +697,31 @@
         if(seen.has(key)) return false
         seen.add(key)
         return true
-      }).slice(0,24)
+      }).sort((a, b) => radioStationScore(b) - radioStationScore(a)).slice(0,24)
+    }
+
+    function radioStationScore(station){
+      let score = 0
+      let name = radioNormalizeName(station.name)
+      let query = radioNormalizeName(radioState.query)
+      let url = radioNormalizeName(station.url_resolved || station.url || "")
+      let homepage = radioNormalizeName(station.homepage || "")
+
+      if(query){
+        if(name === query) score += 100
+        else if(name.startsWith(query)) score += 70
+        else if(name.includes(query)) score += 45
+      }
+
+      if(station.lastcheckok) score += 20
+      if(Number(station.bitrate) >= 96) score += 8
+      if(String(station.codec || "").toLowerCase().includes("mp3")) score += 5
+      if(url.startsWith("https://")) score += 30
+      if(/^http:\/\/\d+\./.test(String(station.url_resolved || station.url || "").toLowerCase())) score -= 70
+      if(homepage.includes("onlineradiobox") || url.includes("onlineradiobox")) score -= 35
+      if(url.includes(".pls") || url.includes(".m3u")) score -= 10
+
+      return score
     }
 
     async function radioFetchStations(forceRefresh){
@@ -652,29 +779,97 @@
     async function radioPlayStation(id){
       let station = radioState.stations.find(item => item.stationuuid === id)
       if(!station) return
+      radioState.playRequestId += 1
+      let requestId = radioState.playRequestId
       radioState.current = station
-      let audio = radioAudio()
-      audio.src = station.url_resolved || station.url
-      audio.volume = radioState.volume
       document.getElementById("radioCurrentName").textContent = station.name
       document.getElementById("radioCurrentMeta").textContent = radioStationLabel(station)
       radioUpdateArtwork(station)
       radioRenderStations()
+
+      if(radioHasCastSession()){
+        await radioPlayStationOnCast(requestId)
+        return
+      }
+
+      await radioPlayStationLocal(station, requestId)
+    }
+
+    async function radioPlayStationLocal(station, requestId, useFallbackUrl){
+      let audio = radioAudio()
+      if(!audio) return
+
+      radioPrepareAudio()
+      radioState.casting = false
+      radioState.playing = false
+      radioSetPlayButton()
+      radioClearBufferTimer()
+      radioSetStatus(`Łączenie i buforowanie: ${station.name}`)
+
+      let streamUrl = useFallbackUrl && station.url ? station.url : (station.url_resolved || station.url)
+      audio.pause()
+      audio.removeAttribute("src")
+      audio.load()
+      audio.src = streamUrl
+      audio.volume = radioState.volume
+      audio.load()
+
+      radioState.bufferTimer = setTimeout(() => {
+        if(radioState.playRequestId === requestId && !radioState.playing && radioState.current === station){
+          radioSetStatus("Stream jeszcze buforuje. Niektóre stacje startują po kilku sekundach.")
+        }
+      }, 4500)
+
       try{
         await audio.play()
-        radioState.playing = true
-        radioSetStatus(`Odtwarzam: ${station.name}`)
       }catch(error){
+        if(!useFallbackUrl && station.url && station.url_resolved && station.url !== station.url_resolved){
+          await radioPlayStationLocal(station, requestId, true)
+          return
+        }
+        radioClearBufferTimer()
         radioState.playing = false
         radioSetStatus("Przeglądarka zablokowała odtwarzanie albo stream nie odpowiada. Dotknij stację jeszcze raz.")
       }
       radioSetPlayButton()
     }
 
+    async function radioPlayStationOnCast(requestId){
+      let session = radioCurrentCastSession()
+      if(!session || !radioState.current) return
+
+      radioClearBufferTimer()
+      radioStopLocalAudio()
+      radioSetStatus(`Wysyłam na Cast: ${radioState.current.name}`)
+
+      try{
+        await radioLoadCastMedia(session)
+        await radioApplyCastVolume()
+        if(radioState.playRequestId === requestId){
+          radioState.casting = true
+          radioState.playing = true
+          radioSetPlayButton()
+          radioRenderStations()
+          radioSetStatus(`Gra na Cast: ${radioState.current.name}`)
+        }
+      }catch(error){
+        if(radioState.playRequestId === requestId){
+          radioState.casting = false
+          radioState.playing = false
+          radioSetPlayButton()
+          radioSetStatus("Cast nie przyjął tego streamu. Spróbuj inną stację albo uruchom lokalnie.")
+        }
+      }
+    }
+
     async function radioTogglePlay(){
       let audio = radioAudio()
       if(!radioState.current){
         if(radioState.stations[0]) radioPlayStation(radioState.stations[0].stationuuid)
+        return
+      }
+      if(radioHasCastSession()){
+        radioSetStatus("Sterowanie pauzą Cast bywa ograniczone. Użyj Stop albo wybierz inną stację.")
         return
       }
       if(audio.paused){
@@ -693,12 +888,12 @@
     }
 
     function radioStop(){
-      let audio = radioAudio()
-      audio.pause()
-      audio.removeAttribute("src")
-      audio.load()
+      radioClearBufferTimer()
+      radioStopCastMedia()
+      radioStopLocalAudio()
       radioState.current = null
       radioState.playing = false
+      radioState.casting = false
       document.getElementById("radioCurrentName").textContent = "Wybierz stację"
       document.getElementById("radioCurrentMeta").textContent = "Odtwarzanie zatrzymane."
       radioUpdateArtwork(null)
@@ -706,10 +901,29 @@
       radioRenderStations()
     }
 
+    function radioStopCastMedia(){
+      let session = radioCurrentCastSession()
+      if(!session) return
+
+      try{
+        let media = typeof session.getMediaSession === "function" ? session.getMediaSession() : null
+        if(media && typeof media.stop === "function"){
+          media.stop(new chrome.cast.media.StopRequest(), () => {}, () => {})
+        }
+      }catch(error){}
+    }
+
     async function radioCast(){
       if(!radioState.current){
-        if(radioState.stations[0]) await radioPlayStation(radioState.stations[0].stationuuid)
-        else return radioSetStatus("Najpierw wybierz stację.")
+        if(radioState.stations[0]){
+          radioState.current = radioState.stations[0]
+          document.getElementById("radioCurrentName").textContent = radioState.current.name
+          document.getElementById("radioCurrentMeta").textContent = radioStationLabel(radioState.current)
+          radioUpdateArtwork(radioState.current)
+          radioRenderStations()
+        }else{
+          return radioSetStatus("Najpierw wybierz stację.")
+        }
       }
       if(!radioState.castReady) radioInitializeCastApi()
       if(!radioState.castReady || !window.cast || !window.chrome || !chrome.cast){
@@ -721,11 +935,16 @@
         let session = context.getCurrentSession() || await context.requestSession()
         await radioLoadCastMedia(session)
         await radioApplyCastVolume()
-        radioAudio().pause()
+        radioStopLocalAudio()
+        radioState.casting = true
+        radioState.playing = true
+        radioSetPlayButton()
+        radioRenderStations()
+        radioSetStatus(`Gra na Cast: ${radioState.current.name}`)
+      }catch(error){
+        radioState.casting = false
         radioState.playing = false
         radioSetPlayButton()
-        radioSetStatus(`Wysłano na Cast: ${radioState.current.name}`)
-      }catch(error){
         radioSetStatus("Cast anulowany albo urządzenie nie przyjęło tego streamu.")
       }
     }
@@ -733,6 +952,7 @@
     function radioCastContentType(station){
       let codec = String(station.codec || "").toLowerCase()
       let url = String(station.url_resolved || station.url || "").toLowerCase()
+      if(Number(station.hls) === 1 || url.includes(".m3u8")) return "application/x-mpegURL"
       if(codec.includes("aac") || url.includes(".aac")) return "audio/aac"
       if(codec.includes("ogg") || url.includes(".ogg")) return "audio/ogg"
       if(codec.includes("opus") || url.includes(".opus")) return "audio/ogg"
@@ -783,6 +1003,7 @@
       radioLoadStations(true)
     }
 
+    radioPrepareAudio()
     radioApplyVolume()
     radioLoadStations()
 
