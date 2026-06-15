@@ -1,8 +1,10 @@
-const CACHE_NAME = "radio4nesthub-v11"
+const CACHE_NAME = "radio4nesthub-v12"
 const APP_SHELL = [
   "/",
   "/index.html",
   "/manifest.json",
+  "/css/style.css",
+  "/js/radio.js",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/icons/favicon-32.png",
