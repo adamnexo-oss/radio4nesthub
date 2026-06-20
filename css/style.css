@@ -66,6 +66,17 @@ body{
   object-fit:cover;
   display:block;
 }
+.radio-art.rmf-classic-art,
+.station-logo-rmf-classic{
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255,255,255,.26), transparent 27%),
+    linear-gradient(135deg,#3f0716,#7f1231 54%,#b88934);
+}
+.radio-art.rmf-classic-art img,
+.station-logo-rmf-classic img{
+  object-fit:contain;
+  padding:6px;
+}
 .radio-art-fallback{
   font-size:25px;
   filter:drop-shadow(0 2px 7px rgba(0,0,0,.28));
@@ -235,6 +246,10 @@ button{
   height:100%;
   object-fit:cover;
   display:block;
+}
+.station-logo-rmf-classic img{
+  object-fit:contain;
+  padding:5px;
 }
 .station-text{
   min-width:0;

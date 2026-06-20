@@ -1,4 +1,4 @@
-const CACHE_NAME = "radio4nesthub-v14"
+const CACHE_NAME = "radio4nesthub-v15"
 const APP_SHELL = [
   "/",
   "/index.html",

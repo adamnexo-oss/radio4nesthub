@@ -93,7 +93,11 @@ let radioState = {
   playRequestId:0,
   stationLoadRequestId:0,
   wantsPlay:false,
-  bufferTimer:null
+  bufferTimer:null,
+  castStartTimer:null,
+  nowPlayingTimer:null,
+  nowPlayingRequestId:0,
+  nowPlaying:null
 }
 
 function radioInitializeCastApi(){
@@ -223,6 +227,25 @@ function radioHasCastSession(){
   return !!radioCurrentCastSession()
 }
 
+function radioClearCastStartTimer(){
+  if(radioState.castStartTimer){
+    clearTimeout(radioState.castStartTimer)
+    radioState.castStartTimer = null
+  }
+}
+
+function radioQueueCastPlayback(delay){
+  if(!radioState.current) return
+  radioClearCastStartTimer()
+  let station = radioState.current
+  let requestId = ++radioState.playRequestId
+  radioState.castStartTimer = setTimeout(() => {
+    radioState.castStartTimer = null
+    if(radioState.current !== station) return
+    radioPlayStationOnCast(requestId)
+  }, delay || 0)
+}
+
 function radioCastSessionChanged(event){
   let state = event && event.sessionState
   let started = state === cast.framework.SessionState.SESSION_STARTED || state === cast.framework.SessionState.SESSION_RESUMED
@@ -230,10 +253,16 @@ function radioCastSessionChanged(event){
 
   if(started){
     radioState.casting = true
-    radioSetStatus("Połączono z Cast.")
+    if(radioState.current){
+      radioSetStatus("Połączono z Cast. Uruchamiam stację...")
+      radioQueueCastPlayback(450)
+    }else{
+      radioSetStatus("Połączono z Cast.")
+    }
   }
 
   if(ended){
+    radioClearCastStartTimer()
     radioState.casting = false
     radioState.playing = false
     radioSetStatus("Cast zakończony.")
@@ -275,6 +304,92 @@ function radioStationLabel(station){
 
 function radioNormalizeName(value){
   return String(value || "").toLowerCase().replace(/ł/g, "l").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+}
+
+function radioStationVisualKind(station){
+  let name = radioNormalizeName(station && station.name)
+  if(name.includes("rmf classic")) return "rmf-classic"
+  return ""
+}
+
+function radioNowPlayingProvider(station){
+  if(radioStationVisualKind(station) === "rmf-classic") return {type:"rmfon", stationId:7}
+  return null
+}
+
+function radioCleanNowPlayingText(value){
+  return String(value || "").replace(/\s+/g, " ").trim()
+}
+
+function radioFormatRmfonNowPlaying(track){
+  if(!track) return null
+  let artist = radioCleanNowPlayingText(track.author)
+  let title = radioCleanNowPlayingText(track.title)
+  let album = radioCleanNowPlayingText(track.recordTitle)
+  let main = artist && title ? `${artist} - ${title}` : (title || artist)
+  if(!main) return null
+  return {
+    artist,
+    title:title || main,
+    album,
+    line:[main, album ? `Film/album: ${album}` : ""].filter(Boolean).join(" • ")
+  }
+}
+
+function radioPickCurrentRmfonTrack(items){
+  if(!Array.isArray(items)) return null
+  return items.find(item => Number(item.order) === 0) || items.find(item => Number(item.uptime) >= 0) || items[0] || null
+}
+
+async function radioFetchNowPlaying(station){
+  let provider = radioNowPlayingProvider(station)
+  if(!provider) return null
+  if(provider.type === "rmfon"){
+    let response = await fetch(`https://api.rmfon.pl/stations/${provider.stationId}/playlist?_=${Date.now()}`, {
+      cache:"no-store",
+      headers:{"Accept":"application/json"}
+    })
+    if(!response.ok) throw new Error(`HTTP ${response.status}`)
+    return radioFormatRmfonNowPlaying(radioPickCurrentRmfonTrack(await response.json()))
+  }
+  return null
+}
+
+function radioSetCurrentMeta(text){
+  let meta = document.getElementById("radioCurrentMeta")
+  if(meta) meta.textContent = text
+}
+
+function radioApplyNowPlaying(station, info){
+  if(!station || !radioState.current || radioState.current.stationuuid !== station.stationuuid) return
+  radioState.nowPlaying = info || null
+  radioSetCurrentMeta(info && info.line ? info.line : radioStationLabel(station))
+}
+
+function radioClearNowPlayingTimer(){
+  if(radioState.nowPlayingTimer){
+    clearInterval(radioState.nowPlayingTimer)
+    radioState.nowPlayingTimer = null
+  }
+}
+
+function radioStartNowPlaying(station){
+  radioClearNowPlayingTimer()
+  radioState.nowPlaying = null
+  let requestId = ++radioState.nowPlayingRequestId
+  radioSetCurrentMeta(radioStationLabel(station))
+  if(!radioNowPlayingProvider(station)) return
+
+  let update = () => {
+    radioFetchNowPlaying(station).then(info => {
+      if(requestId === radioState.nowPlayingRequestId) radioApplyNowPlaying(station, info)
+    }).catch(() => {
+      if(requestId === radioState.nowPlayingRequestId && !radioState.nowPlaying) radioSetCurrentMeta(radioStationLabel(station))
+    })
+  }
+
+  update()
+  radioState.nowPlayingTimer = setInterval(update, 30000)
 }
 
 function radioLocalArtworkUrl(file, forceHosted){
@@ -365,6 +480,7 @@ function radioUpdateArtwork(station){
   if(!box) return
 
   box.classList.toggle("playing", radioState.playing)
+  box.classList.toggle("rmf-classic-art", radioStationVisualKind(station) === "rmf-classic")
 
   if(!station){
     box.innerHTML = `<span class="radio-art-fallback">📻</span>`
@@ -471,7 +587,8 @@ function radioRenderStations(){
     let active = radioState.current && radioState.current.stationuuid === station.stationuuid
     let art = radioStationArtwork(station, true)
     let logo = art ? `<img src="${radioEscape(art)}" alt="" onerror="this.replaceWith(document.createTextNode('${radioFallbackIcon(station)}'))">` : `<span>${radioFallbackIcon(station)}</span>`
-    return `<button class="radio-station ${active ? "active" : ""}" onclick="radioPlayStation('${station.stationuuid}')"><span class="station-logo">${logo}</span><span class="station-text"><b>${radioEscape(station.name)}</b><span>${radioEscape(radioStationLabel(station))}</span><span class="station-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span></button>`
+    let visual = radioStationVisualKind(station)
+    return `<button class="radio-station ${active ? "active" : ""}" onclick="radioPlayStation('${station.stationuuid}')"><span class="station-logo ${visual ? `station-logo-${visual}` : ""}">${logo}</span><span class="station-text"><b>${radioEscape(station.name)}</b><span>${radioEscape(radioStationLabel(station))}</span><span class="station-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span></span></button>`
   }).join("")
 }
 
@@ -482,7 +599,7 @@ async function radioPlayStation(id){
   let requestId = radioState.playRequestId
   radioState.current = station
   document.getElementById("radioCurrentName").textContent = station.name
-  document.getElementById("radioCurrentMeta").textContent = radioStationLabel(station)
+  radioStartNowPlaying(station)
   radioUpdateArtwork(station)
   radioRenderStations()
 
@@ -593,12 +710,15 @@ async function radioTogglePlay(){
 
 function radioStop(){
   radioClearBufferTimer()
+  radioClearCastStartTimer()
+  radioClearNowPlayingTimer()
   radioStopCastMedia()
   radioStopLocalAudio()
   radioState.current = null
   radioState.playing = false
   radioState.casting = false
   radioState.wantsPlay = false
+  radioState.nowPlaying = null
   document.getElementById("radioCurrentName").textContent = "Wybierz stację"
   document.getElementById("radioCurrentMeta").textContent = "Odtwarzanie zatrzymane."
   radioUpdateArtwork(null)
@@ -623,7 +743,7 @@ async function radioCast(){
     if(radioState.stations[0]){
       radioState.current = radioState.stations[0]
       document.getElementById("radioCurrentName").textContent = radioState.current.name
-      document.getElementById("radioCurrentMeta").textContent = radioStationLabel(radioState.current)
+      radioStartNowPlaying(radioState.current)
       radioUpdateArtwork(radioState.current)
       radioRenderStations()
     }else{
@@ -637,18 +757,18 @@ async function radioCast(){
   try{
     radioSetStatus("Wybierz urządzenie Cast z listy.")
     let context = cast.framework.CastContext.getInstance()
-    let session = context.getCurrentSession() || await context.requestSession()
-    await radioLoadCastMedia(session)
-    await radioApplyCastVolume()
-    radioStopLocalAudio()
-    radioState.casting = true
-    radioState.playing = true
-    radioSetPlayButton()
-    radioRenderStations()
-    radioSetStatus(`Gra na Cast: ${radioState.current.name}`)
+    let session = context.getCurrentSession()
+    if(session){
+      radioQueueCastPlayback(0)
+    }else{
+      await context.requestSession()
+      radioSetStatus("Łączę z Cast. Uruchamiam stację...")
+      radioQueueCastPlayback(550)
+    }
   }catch(error){
     radioState.casting = false
     radioState.playing = false
+    radioClearCastStartTimer()
     radioSetPlayButton()
     radioSetStatus("Cast anulowany albo urządzenie nie przyjęło tego streamu.")
   }
@@ -669,9 +789,11 @@ function radioCastContentType(station){
 function radioLoadCastMedia(session){
   let station = radioState.current
   let mediaInfo = new chrome.cast.media.MediaInfo(station.url_resolved || station.url, radioCastContentType(station))
+  let nowPlaying = radioState.nowPlaying
   mediaInfo.metadata = new chrome.cast.media.MusicTrackMediaMetadata()
-  mediaInfo.metadata.title = station.name
-  mediaInfo.metadata.artist = radioStationLabel(station)
+  mediaInfo.metadata.title = nowPlaying && nowPlaying.title ? nowPlaying.title : station.name
+  mediaInfo.metadata.artist = nowPlaying && nowPlaying.artist ? nowPlaying.artist : radioStationLabel(station)
+  if(nowPlaying && nowPlaying.album) mediaInfo.metadata.albumName = nowPlaying.album
   mediaInfo.metadata.images = [new chrome.cast.Image(radioStationArtwork(station, true, true))]
   mediaInfo.streamType = chrome.cast.media.StreamType.LIVE
   let request = new chrome.cast.media.LoadRequest(mediaInfo)
