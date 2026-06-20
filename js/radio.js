@@ -12,6 +12,7 @@ const radioApiHosts = [
 ]
 const radioHostedOrigin = "https://radio4nesthub.web.app"
 const radioHostedArtwork = `${radioHostedOrigin}/icons/icon-512.png`
+const radioRmfClassicRdsUrl = `${radioHostedOrigin}/api/rds/rmf-classic`
 const radioStreamOverrides = [
   {
     terms:["rmf classic"],
@@ -370,9 +371,41 @@ function radioFormatRmfonNowPlaying(track){
   }
 }
 
+function radioFormatProxyNowPlaying(data){
+  if(!data) return null
+  let artist = radioCleanNowPlayingText(data.artist)
+  let title = radioCleanNowPlayingText(data.title)
+  let album = radioCleanNowPlayingText(data.album)
+  let image = radioCleanNowPlayingText(data.image)
+  let line = radioCleanNowPlayingText(data.line)
+  let main = artist && title ? `${artist} - ${title}` : (title || artist)
+  if(!line && main){
+    line = [`Utwór: ${main}`, album ? `Film/album: ${album}` : ""].filter(Boolean).join(" • ")
+  }
+  if(!line && !main) return null
+  return {
+    artist,
+    title:title || main || "RMF Classic",
+    album,
+    image,
+    line:line || main
+  }
+}
+
 function radioPickCurrentRmfonTrack(items){
   if(!Array.isArray(items)) return null
   return items.find(item => Number(item.order) === 0) || items.find(item => Number(item.uptime) >= 0) || items[0] || null
+}
+
+async function radioRefreshNowPlayingForCast(station){
+  if(!station) return
+  try{
+    let info = await Promise.race([
+      radioFetchNowPlaying(station),
+      radioWait(1400).then(() => null)
+    ])
+    if(info) radioApplyNowPlaying(station, info)
+  }catch(error){}
 }
 
 function radioParseSrDate(value){
@@ -467,6 +500,17 @@ async function radioFetchNowPlaying(station){
   if(!provider) return null
   if(provider.type === "sr") return radioFetchSrNowPlaying(provider.channelId)
   if(provider.type === "rmfon"){
+    try{
+      let proxyResponse = await fetch(`${radioRmfClassicRdsUrl}?_=${Date.now()}`, {
+        cache:"no-store",
+        headers:{"Accept":"application/json"}
+      })
+      if(proxyResponse.ok){
+        let proxyInfo = radioFormatProxyNowPlaying(await proxyResponse.json())
+        if(proxyInfo) return proxyInfo
+      }
+    }catch(error){}
+
     let response = await fetch(`https://api.rmfon.pl/stations/${provider.stationId}/playlist?_=${Date.now()}`, {
       cache:"no-store",
       headers:{"Accept":"application/json"}
@@ -553,6 +597,13 @@ function radioStationArtwork(station, useFallback, forceHosted){
   if(!url || !url.startsWith("https://")) return useFallback ? radioAppArtwork(forceHosted) : ""
   if(radioArtworkMayFailOnCast(url)) return useFallback ? radioAppArtwork(forceHosted) : ""
   return url
+}
+
+function radioCastStationArtwork(station){
+  if(radioStationVisualKind(station) === "rmf-classic"){
+    return radioLocalArtworkUrl("rmf-classic-cast.png", true)
+  }
+  return radioStationArtwork(station, true, true)
 }
 
 function radioApplyStreamOverride(station){
@@ -780,6 +831,8 @@ async function radioPlayStationOnCast(requestId){
 
   radioClearBufferTimer()
   radioStopLocalAudio()
+  radioSetStatus(`Pobieram opis dla Cast: ${radioState.current.name}`)
+  await radioRefreshNowPlayingForCast(radioState.current)
   radioSetStatus(`Wysyłam na Cast: ${radioState.current.name}`)
 
   try{
@@ -916,7 +969,9 @@ function radioLoadCastMedia(session){
   mediaInfo.metadata.title = nowPlaying && nowPlaying.title ? nowPlaying.title : station.name
   mediaInfo.metadata.artist = nowPlaying && nowPlaying.artist ? nowPlaying.artist : radioStationLabel(station)
   if(nowPlaying && nowPlaying.album) mediaInfo.metadata.albumName = nowPlaying.album
-  let image = nowPlaying && nowPlaying.image && nowPlaying.image.startsWith("https://") ? nowPlaying.image : radioStationArtwork(station, true, true)
+  let image = radioStationVisualKind(station) === "rmf-classic"
+    ? radioCastStationArtwork(station)
+    : (nowPlaying && nowPlaying.image && nowPlaying.image.startsWith("https://") ? nowPlaying.image : radioCastStationArtwork(station))
   mediaInfo.metadata.images = [new chrome.cast.Image(image)]
   mediaInfo.streamType = chrome.cast.media.StreamType.LIVE
   let request = new chrome.cast.media.LoadRequest(mediaInfo)
