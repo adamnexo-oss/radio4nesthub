@@ -291,6 +291,19 @@ async function radioApplyCastVolume(){
   }
 }
 
+function radioWait(ms){
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+async function radioLoadCastMediaWithRetry(session){
+  try{
+    return await radioLoadCastMedia(session)
+  }catch(error){
+    await radioWait(750)
+    return radioLoadCastMedia(session)
+  }
+}
+
 function radioSetPlayButton(){
   document.getElementById("radioPlayPause").textContent = radioState.playing || radioState.casting ? "Ⅱ" : "▶"
   radioUpdateArtwork(radioState.current)
@@ -313,12 +326,32 @@ function radioStationVisualKind(station){
 }
 
 function radioNowPlayingProvider(station){
+  let srChannelId = radioSverigesRadioChannelId(station)
+  if(srChannelId) return {type:"sr", channelId:srChannelId}
   if(radioStationVisualKind(station) === "rmf-classic") return {type:"rmfon", stationId:7}
   return null
 }
 
+function radioSverigesRadioChannelId(station){
+  let name = radioNormalizeName(station && station.name)
+  if(name.includes("p4 gotland")) return 205
+  if(name.includes("p4 stockholm")) return 701
+  if(name.includes("p2")) return 163
+  if(name.includes("sveriges radio p1") || name.includes("sr p1")) return 132
+  if(name.includes("sveriges radio p3") || name.includes("sr p3")) return 164
+  return 0
+}
+
 function radioCleanNowPlayingText(value){
-  return String(value || "").replace(/\s+/g, " ").trim()
+  return String(value || "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 function radioFormatRmfonNowPlaying(track){
@@ -332,7 +365,8 @@ function radioFormatRmfonNowPlaying(track){
     artist,
     title:title || main,
     album,
-    line:[main, album ? `Film/album: ${album}` : ""].filter(Boolean).join(" • ")
+    image:radioCleanNowPlayingText(track.coverBigUrl || track.coverUrl),
+    line:[`Utwór: ${main}`, album ? `Film/album: ${album}` : ""].filter(Boolean).join(" • ")
   }
 }
 
@@ -341,9 +375,97 @@ function radioPickCurrentRmfonTrack(items){
   return items.find(item => Number(item.order) === 0) || items.find(item => Number(item.uptime) >= 0) || items[0] || null
 }
 
+function radioParseSrDate(value){
+  let match = String(value || "").match(/\d+/)
+  return match ? new Date(Number(match[0])) : null
+}
+
+function radioFormatSrTime(date){
+  if(!date || Number.isNaN(date.getTime())) return ""
+  return date.toLocaleTimeString("sv-SE", {hour:"2-digit", minute:"2-digit"})
+}
+
+function radioFormatSrTimeRange(item){
+  let start = radioFormatSrTime(radioParseSrDate(item && (item.starttimeutc || item.starttime)))
+  let end = radioFormatSrTime(radioParseSrDate(item && (item.endtimeutc || item.stoptimeutc || item.endtime)))
+  return start && end ? `${start}-${end}` : ""
+}
+
+function radioFormatSrSong(song){
+  if(!song) return null
+  let title = radioCleanNowPlayingText(song.title)
+  let artist = radioCleanNowPlayingText(song.artist || song.description)
+  let composer = radioCleanNowPlayingText(song.composer)
+  let album = radioCleanNowPlayingText(song.albumname)
+  let main = artist && title ? `${artist} - ${title}` : (title || artist)
+  if(!main) return null
+  return {
+    artist,
+    title:title || main,
+    album,
+    line:[`Utwór: ${main}`, composer ? `Kompozytor: ${composer}` : "", album ? `Album: ${album}` : ""].filter(Boolean).join(" • ")
+  }
+}
+
+function radioFormatSrSchedule(data){
+  let episode = data && data.channel && data.channel.currentscheduledepisode
+  if(!episode) return null
+  let title = radioCleanNowPlayingText(episode.title)
+  let subtitle = radioCleanNowPlayingText(episode.subtitle)
+  let program = radioCleanNowPlayingText(episode.program && episode.program.name)
+  let description = radioCleanNowPlayingText(episode.description)
+  let time = radioFormatSrTimeRange(episode)
+  let detail = [time, subtitle, program && program !== title ? program : "", description].filter(Boolean).join(" • ")
+  if(!title && !detail) return null
+  return {
+    artist:program || "Sveriges Radio",
+    title:title || program || "Audycja",
+    album:time,
+    image:radioCleanNowPlayingText(episode.socialimage),
+    line:[`Audycja: ${title || program}`, detail].filter(Boolean).join(" • ")
+  }
+}
+
+async function radioFetchSrNowPlaying(channelId){
+  let songInfo = null
+  try{
+    let playlistResponse = await fetch(`https://api.sr.se/api/v2/playlists/rightnow?channelid=${channelId}&format=json&_=${Date.now()}`, {
+      cache:"no-store",
+      headers:{"Accept":"application/json"}
+    })
+    if(playlistResponse.ok){
+      let playlistData = await playlistResponse.json()
+      songInfo = radioFormatSrSong(playlistData && playlistData.playlist && playlistData.playlist.song)
+    }
+  }catch(error){}
+
+  let scheduleInfo = null
+  try{
+    let scheduleResponse = await fetch(`https://api.sr.se/api/v2/scheduledepisodes/rightnow?channelid=${channelId}&format=json&_=${Date.now()}`, {
+      cache:"no-store",
+      headers:{"Accept":"application/json"}
+    })
+    if(!scheduleResponse.ok) throw new Error(`HTTP ${scheduleResponse.status}`)
+    scheduleInfo = radioFormatSrSchedule(await scheduleResponse.json())
+  }catch(error){
+    if(!songInfo) throw error
+  }
+
+  if(songInfo && scheduleInfo){
+    return {
+      ...songInfo,
+      image:scheduleInfo.image || songInfo.image,
+      line:[songInfo.line, scheduleInfo.line].filter(Boolean).join(" • ")
+    }
+  }
+
+  return songInfo || scheduleInfo
+}
+
 async function radioFetchNowPlaying(station){
   let provider = radioNowPlayingProvider(station)
   if(!provider) return null
+  if(provider.type === "sr") return radioFetchSrNowPlaying(provider.channelId)
   if(provider.type === "rmfon"){
     let response = await fetch(`https://api.rmfon.pl/stations/${provider.stationId}/playlist?_=${Date.now()}`, {
       cache:"no-store",
@@ -661,7 +783,7 @@ async function radioPlayStationOnCast(requestId){
   radioSetStatus(`Wysyłam na Cast: ${radioState.current.name}`)
 
   try{
-    await radioLoadCastMedia(session)
+    await radioLoadCastMediaWithRetry(session)
     await radioApplyCastVolume()
     if(radioState.playRequestId === requestId){
       radioState.casting = true
@@ -794,7 +916,8 @@ function radioLoadCastMedia(session){
   mediaInfo.metadata.title = nowPlaying && nowPlaying.title ? nowPlaying.title : station.name
   mediaInfo.metadata.artist = nowPlaying && nowPlaying.artist ? nowPlaying.artist : radioStationLabel(station)
   if(nowPlaying && nowPlaying.album) mediaInfo.metadata.albumName = nowPlaying.album
-  mediaInfo.metadata.images = [new chrome.cast.Image(radioStationArtwork(station, true, true))]
+  let image = nowPlaying && nowPlaying.image && nowPlaying.image.startsWith("https://") ? nowPlaying.image : radioStationArtwork(station, true, true)
+  mediaInfo.metadata.images = [new chrome.cast.Image(image)]
   mediaInfo.streamType = chrome.cast.media.StreamType.LIVE
   let request = new chrome.cast.media.LoadRequest(mediaInfo)
   request.autoplay = true
