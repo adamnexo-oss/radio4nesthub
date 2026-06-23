@@ -98,11 +98,13 @@ let radioState = {
   castStartTimer:null,
   nowPlayingTimer:null,
   nowPlayingRequestId:0,
-  nowPlaying:null
+  nowPlaying:null,
+  castResetting:false
 }
 
-function radioInitializeCastApi(){
-  if(!window.cast || !window.chrome || !chrome.cast || radioState.castReady) return
+function radioInitializeCastApi(force){
+  if(!window.cast || !window.chrome || !chrome.cast) return
+  if(radioState.castReady && !force) return
   let context = cast.framework.CastContext.getInstance()
   context.setOptions({
     receiverApplicationId:chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
@@ -248,6 +250,8 @@ function radioQueueCastPlayback(delay){
 }
 
 function radioCastSessionChanged(event){
+  if(radioState.castResetting) return
+
   let state = event && event.sessionState
   let started = state === cast.framework.SessionState.SESSION_STARTED || state === cast.framework.SessionState.SESSION_RESUMED
   let ended = state === cast.framework.SessionState.SESSION_ENDED
@@ -946,6 +950,41 @@ async function radioCast(){
     radioClearCastStartTimer()
     radioSetPlayButton()
     radioSetStatus("Cast anulowany albo urządzenie nie przyjęło tego streamu.")
+  }
+}
+
+async function radioResetCast(){
+  radioSetStatus("Resetuję Cast...")
+  radioState.castResetting = true
+  radioClearCastStartTimer()
+
+  try{
+    if(window.cast && cast.framework){
+      let context = cast.framework.CastContext.getInstance()
+      let session = context.getCurrentSession()
+      if(session){
+        radioStopCastMedia()
+        if(typeof context.endCurrentSession === "function"){
+          context.endCurrentSession(true)
+        }
+      }
+    }
+  }catch(error){}
+
+  radioState.casting = false
+  radioState.playing = false
+  radioState.castReady = false
+  radioSetPlayButton()
+  radioRenderStations()
+
+  await radioWait(900)
+  radioState.castResetting = false
+  radioInitializeCastApi(true)
+
+  if(radioState.castReady){
+    radioSetStatus("Cast odświeżony. Kliknij Cast i wybierz Nest Hub ponownie.")
+  }else{
+    radioSetStatus("Cast jeszcze nie jest gotowy. Odczekaj chwilę albo odśwież stronę.")
   }
 }
 
